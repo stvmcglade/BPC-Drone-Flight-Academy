@@ -265,16 +265,22 @@ land();`,
         ],
         example: `takeOff();
 if (droneIsAirborne) {
-moveRight(170);
-moveUp(65);
-moveRight(160);
+moveRight(100);
+moveUp(93);
 moveUp(170);
-moveRight(230);
+moveRight(110);
+moveRight(60);
+land();
+takeSample();
+takeOff();
+moveUp(120);
+moveRight(167);
+moveDown(110);
 moveRight(110);
 moveDown(180);
 wait(1);
-moveLeft(670);
-moveDown(65);
+moveDown(93);
+moveLeft(607);
 }
 land();`,
       },
@@ -302,15 +308,19 @@ land();`,
         ],
         example: `takeOff();
 if (droneIsAirborne) {
-moveRight(130);
-moveUp(80);
+moveRight(70);
+moveUp(107);
+moveUp(210);
 moveRight(190);
-moveUp(145);
+moveDown(65);
 moveRight(230);
+moveDown(145);
 moveRight(150);
-moveDown(155);
-moveLeft(700);
-moveDown(70);
+land();
+takeSample();
+takeOff();
+moveDown(107);
+moveLeft(640);
 }
 land();`,
       },
@@ -339,15 +349,19 @@ land();`,
         ],
         example: `takeOff();
 if (droneIsAirborne) {
-moveRight(155);
+moveRight(95);
 moveUp(100);
+land();
+takeSample();
+takeOff();
+moveUp(270);
 moveRight(145);
-moveUp(165);
+moveDown(78);
 moveRight(250);
+moveDown(180);
 moveRight(130);
-moveDown(185);
-moveLeft(680);
-moveDown(100);
+moveDown(112);
+moveLeft(620);
 }
 land();`,
       },
@@ -1374,8 +1388,24 @@ function getMissionColorZones() {
   ];
 }
 
+function isExampleAvailableForMission() {
+  return state.missionIndex === 0;
+}
+
+function refreshExampleButton() {
+  const exampleAvailable = isExampleAvailableForMission();
+  exampleButton.classList.toggle("hidden", !exampleAvailable);
+  exampleButton.disabled = !exampleAvailable;
+}
+
 function loadMissionEditor(exampleOverride) {
-  codeEditor.value = exampleOverride ?? getMission().example;
+  if (exampleOverride !== undefined) {
+    codeEditor.value = exampleOverride;
+    refreshExampleButton();
+    return;
+  }
+  codeEditor.value = isExampleAvailableForMission() ? getMission().example : "";
+  refreshExampleButton();
 }
 
 function updateFeedback(message, badgeText, badgeClass) {
@@ -1730,6 +1760,24 @@ function validateRankRequirements(meta) {
   }
 }
 
+function validateMissionCommandRequirements(commands) {
+  const mission = getMission();
+  const commandNames = new Set(commands.map((command) => command.name));
+  const missingCommands = [];
+  if ((mission.sampleRequirements ?? []).length && !commandNames.has("takeSample")) {
+    missingCommands.push("takeSample();");
+  }
+  if ((mission.landSampleRequirements ?? []).length && !commandNames.has("takeLandSample")) {
+    missingCommands.push("takeLandSample();");
+  }
+  if ((mission.photoRequirements ?? []).length && !commandNames.has("takePhoto")) {
+    missingCommands.push("takePhoto();");
+  }
+  if (missingCommands.length) {
+    throw new Error(`This mission requires ${missingCommands.join(", ")} in your code before it can be completed.`);
+  }
+}
+
 function validateCommandAgainstState(command, previewDrone) {
   if (command.name === "takeOff") {
     if (previewDrone.airborne) throw new Error(`Line ${command.line}: the drone is already airborne.`);
@@ -1861,6 +1909,7 @@ function startProgram() {
   }
   try {
     const parsedProgram = parseProgram(codeEditor.value);
+    validateMissionCommandRequirements(parsedProgram.commands);
     state.animationQueue = buildAnimationQueue(parsedProgram.commands);
     state.drone = getInitialDrone();
     state.currentStep = null;
@@ -2373,6 +2422,10 @@ function getShortestTurn(start, end) {
 runButton.addEventListener("click", startProgram);
 resetButton.addEventListener("click", resetDrone);
 exampleButton.addEventListener("click", () => {
+  if (!isExampleAvailableForMission()) {
+    updateFeedback("Examples are only available on Mission 1 of each flight level.", "No Example", "chip-warn");
+    return;
+  }
   loadMissionEditor();
   updateFeedback("Mission example loaded into the editor.", "Example", "chip-calm");
 });
