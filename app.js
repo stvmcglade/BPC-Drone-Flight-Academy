@@ -146,7 +146,7 @@ land();`,
         ],
         noFlyZones: [
           { x: 300, y: 275, width: 120, height: 165, label: "Dock Crane" },
-          { x: 545, y: 110, width: 105, height: 155, label: "Mast" },
+          { x: 660, y: 110, width: 105, height: 155, label: "Mast" },
         ],
         decorations: [
           { type: "cloud", x: 170, y: 90, size: 0.9 },
@@ -519,7 +519,7 @@ land();`,
         noFlyZones: [
           { x: 250, y: 250, width: 85, height: 160, label: "Dock Tower" },
           { x: 455, y: 120, width: 90, height: 170, label: "Relay Pillar" },
-          { x: 650, y: 210, width: 95, height: 160, label: "Radar Core" },
+          { x: 650, y: 270, width: 95, height: 120, label: "Radar Core" },
         ],
         decorations: [
           { type: "cloud", x: 205, y: 90, size: 0.85 },
@@ -831,20 +831,8 @@ function getMissionEntryFromKey(missionKey) {
 }
 
 function getStudentUnlockedMissionKeys() {
-  const account = getCurrentAccount();
   const missions = getAllMissionEntries();
-  if (!account || account.role !== "student") {
-    return new Set(missions.map((entry) => entry.missionKey));
-  }
-  const progress = ensureAccountProgress(account);
-  const unlocked = new Set();
-  for (const entry of missions) {
-    unlocked.add(entry.missionKey);
-    if (!progress[entry.missionKey]?.completed) {
-      break;
-    }
-  }
-  return unlocked;
+  return new Set(missions.map((entry) => entry.missionKey));
 }
 
 function getStudentCompletionSummary(account = getCurrentAccount()) {
@@ -1036,11 +1024,6 @@ function switchStudentMissionByKey(missionKey) {
   if (!missionEntry || !isStudentUser()) {
     return;
   }
-  if (!getStudentUnlockedMissionKeys().has(missionEntry.missionKey)) {
-    renderStudentProgress();
-    updateFeedback("Complete the previous mission before opening this one.", "Locked", "chip-warn");
-    return;
-  }
   state.selectedStudentMissionKey = missionEntry.missionKey;
   state.levelKey = missionEntry.levelKey;
   state.missionIndex = missionEntry.missionIndex;
@@ -1137,7 +1120,6 @@ function renderStudentProgress() {
   const progress = ensureAccountProgress(account);
   const summary = getStudentCompletionSummary(account);
   const missions = summary.missions;
-  const unlockedMissionKeys = getStudentUnlockedMissionKeys();
   const completedCount = summary.completedCount;
   studentProgressBadge.textContent = `${completedCount} complete`;
   studentProgressBadge.className = `chip ${completedCount ? "chip-good" : "chip-calm"}`;
@@ -1156,10 +1138,7 @@ function renderStudentProgress() {
       <span class="role-badge ${levelComplete ? "earned" : ""}">${levelComplete ? `${campaign.label} Badge` : "Badge locked"}</span>
     </div>`;
   }).join("");
-  if (
-    !missions.some((entry) => entry.missionKey === state.selectedStudentMissionKey) ||
-    !unlockedMissionKeys.has(state.selectedStudentMissionKey)
-  ) {
+  if (!missions.some((entry) => entry.missionKey === state.selectedStudentMissionKey)) {
     state.selectedStudentMissionKey = missions[0]?.missionKey ?? "";
   }
 
@@ -1167,7 +1146,6 @@ function renderStudentProgress() {
     <option
       value="${entry.missionKey}"
       ${entry.missionKey === state.selectedStudentMissionKey ? "selected" : ""}
-      ${unlockedMissionKeys.has(entry.missionKey) ? "" : "disabled"}
     >
       ${entry.levelLabel} - ${entry.missionTitle}
     </option>
@@ -1181,8 +1159,7 @@ function renderStudentProgress() {
 
   const complete = Boolean(progress[selectedMission.missionKey]?.completed);
   const completedAt = progress[selectedMission.missionKey]?.completedAt;
-  const unlocked = unlockedMissionKeys.has(selectedMission.missionKey);
-  studentProgressList.innerHTML = `<div class="checkpoint-item ${complete ? "complete" : ""}"><div><strong>${selectedMission.levelLabel} - ${selectedMission.missionTitle}</strong><div>${complete ? `Completed${completedAt ? ` on ${new Date(completedAt).toLocaleDateString()}` : ""}` : unlocked ? "Ready to attempt" : "Locked until the previous mission is completed"}</div></div><span class="chip ${complete ? "chip-good" : unlocked ? "chip-calm" : "chip-warn"}">${complete ? "Done" : unlocked ? "Unlocked" : "Locked"}</span></div>`;
+  studentProgressList.innerHTML = `<div class="checkpoint-item ${complete ? "complete" : ""}"><div><strong>${selectedMission.levelLabel} - ${selectedMission.missionTitle}</strong><div>${complete ? `Completed${completedAt ? ` on ${new Date(completedAt).toLocaleDateString()}` : ""}` : "Ready to attempt"}</div></div><span class="chip ${complete ? "chip-good" : "chip-calm"}">${complete ? "Done" : "Available"}</span></div>`;
 
   certificatePanel.classList.toggle("hidden", !summary.allComplete);
   if (summary.allComplete) {
@@ -1550,13 +1527,6 @@ function resetDrone() {
 }
 
 function applyLevel(levelKey) {
-  if (isStudentUser()) {
-    const targetMissionKey = getMissionKey(levelKey, 0);
-    if (!getStudentUnlockedMissionKeys().has(targetMissionKey)) {
-      updateFeedback("Complete the earlier missions before moving to that level.", "Locked", "chip-warn");
-      return;
-    }
-  }
   state.levelKey = levelKey;
   state.missionIndex = 0;
   state.selectedStudentMissionKey = getMissionKey(state.levelKey, state.missionIndex);
@@ -1568,11 +1538,6 @@ function applyLevel(levelKey) {
 
 function loadMission(index) {
   const nextIndex = clamp(index, 0, getCampaign().missions.length - 1);
-  const nextMissionKey = getMissionKey(state.levelKey, nextIndex);
-  if (isStudentUser() && !getStudentUnlockedMissionKeys().has(nextMissionKey)) {
-    updateFeedback("Complete the previous mission before opening this one.", "Locked", "chip-warn");
-    return;
-  }
   state.missionIndex = nextIndex;
   state.selectedStudentMissionKey = getMissionKey(state.levelKey, state.missionIndex);
   loadMissionEditor();
