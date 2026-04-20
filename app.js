@@ -1159,7 +1159,9 @@ function renderStudentProgress() {
 
   const complete = Boolean(progress[selectedMission.missionKey]?.completed);
   const completedAt = progress[selectedMission.missionKey]?.completedAt;
-  studentProgressList.innerHTML = `<div class="checkpoint-item ${complete ? "complete" : ""}"><div><strong>${selectedMission.levelLabel} - ${selectedMission.missionTitle}</strong><div>${complete ? `Completed${completedAt ? ` on ${new Date(completedAt).toLocaleDateString()}` : ""}` : "Ready to attempt"}</div></div><span class="chip ${complete ? "chip-good" : "chip-calm"}">${complete ? "Done" : "Available"}</span></div>`;
+  const savedCode = progress[selectedMission.missionKey]?.code;
+  const completeMessage = `Completed${completedAt ? ` on ${new Date(completedAt).toLocaleDateString()}` : ""}${savedCode ? ". Saved code will load in the editor." : ""}`;
+  studentProgressList.innerHTML = `<div class="checkpoint-item ${complete ? "complete" : ""}"><div><strong>${selectedMission.levelLabel} - ${selectedMission.missionTitle}</strong><div>${complete ? completeMessage : "Ready to attempt"}</div></div><span class="chip ${complete ? "chip-good" : "chip-calm"}">${complete ? "Done" : "Available"}</span></div>`;
 
   certificatePanel.classList.toggle("hidden", !summary.allComplete);
   if (summary.allComplete) {
@@ -1325,6 +1327,7 @@ function recordMissionCompletion() {
     completedAt: new Date().toISOString(),
     levelKey: state.levelKey,
     missionIndex: state.missionIndex,
+    code: codeEditor.value,
   };
   saveAccounts();
   renderStudentProgress();
@@ -1375,13 +1378,23 @@ function refreshExampleButton() {
   exampleButton.disabled = !exampleAvailable;
 }
 
+function getSavedMissionCode() {
+  if (!isStudentUser()) {
+    return "";
+  }
+  const account = getCurrentAccount();
+  const progress = ensureAccountProgress(account);
+  return progress[getMissionKey()]?.code ?? "";
+}
+
 function loadMissionEditor(exampleOverride) {
   if (exampleOverride !== undefined) {
     codeEditor.value = exampleOverride;
     refreshExampleButton();
     return;
   }
-  codeEditor.value = isExampleAvailableForMission() ? getMission().example : "";
+  const savedCode = getSavedMissionCode();
+  codeEditor.value = savedCode || (isExampleAvailableForMission() ? getMission().example : "");
   refreshExampleButton();
 }
 
