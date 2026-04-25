@@ -84,6 +84,7 @@
             <span id="studentProgressBadge" class="chip chip-calm">0 complete</span>
           </div>
           <div id="roleProgressPanel" class="role-progress-panel"></div>
+          <div id="rankCertificatesPanel" class="rank-certificates-panel hidden"></div>
           <label class="field-label" for="studentMissionSelect">Select Mission</label>
           <select id="studentMissionSelect"></select>
           <div id="studentProgressList" class="checkpoint-list"></div>
@@ -133,7 +134,7 @@
           <span class="chip">Helpful</span>
         </div>
         <p class="panel-copy" id="syntaxNote">The editor accepts one command per line. Distances are in pixels, rotations are in degrees, and each line must end with a semicolon.</p>
-        <p class="panel-copy" id="rankRequirementNote">Cadets can solve missions with direct commands. Higher ranks unlock required control structures.</p>
+        <p class="panel-copy" id="rankRequirementNote">Direct commands work for every mission. If statements and loops are optional tools students can use if they want to.</p>
       </section>
 
       <section class="panel teacher-panel hidden" id="teacherPanel">
@@ -245,6 +246,7 @@ land();</textarea>
     </main>
   </div>
 
+  <script src="logo-data.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

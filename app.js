@@ -51,6 +51,7 @@ const studentProgressBadge = document.querySelector("#studentProgressBadge");
 const studentMissionSelect = document.querySelector("#studentMissionSelect");
 const studentProgressList = document.querySelector("#studentProgressList");
 const roleProgressPanel = document.querySelector("#roleProgressPanel");
+const rankCertificatesPanel = document.querySelector("#rankCertificatesPanel");
 const certificatePanel = document.querySelector("#certificatePanel");
 const certificateStudentName = document.querySelector("#certificateStudentName");
 const certificateDateText = document.querySelector("#certificateDateText");
@@ -777,6 +778,8 @@ const state = {
     humOscillator: null,
     humGain: null,
   },
+  certificateLogo: null,
+  certificateLogoPromise: null,
 };
 
 function getCampaign() {
@@ -852,6 +855,39 @@ function getStudentCompletionSummary(account = getCurrentAccount()) {
     allComplete: completedEntries.length === missions.length && missions.length > 0,
     latestCompletedAt: completedDates[completedDates.length - 1] ?? "",
   };
+}
+
+function getCompletedRankCertificates(account = getCurrentAccount()) {
+  if (!account || account.role !== "student") {
+    return [];
+  }
+  const progress = ensureAccountProgress(account);
+  return Object.entries(CAMPAIGNS).flatMap(([levelKey, campaign]) => {
+    const missionKeys = campaign.missions.map((_mission, missionIndex) => getMissionKey(levelKey, missionIndex));
+    const complete = missionKeys.every((missionKey) => progress[missionKey]?.completed);
+    if (!complete) {
+      return [];
+    }
+    const completedDates = missionKeys
+      .map((missionKey) => progress[missionKey]?.completedAt)
+      .filter(Boolean)
+      .sort();
+    return [{
+      levelKey,
+      levelLabel: campaign.label,
+      awardedAt: completedDates[completedDates.length - 1] ?? "",
+    }];
+  });
+}
+
+function formatCertificateDate(value) {
+  const date = value ? new Date(value) : new Date();
+  const safeDate = Number.isNaN(date.getTime()) ? new Date() : date;
+  return safeDate.toLocaleDateString("en-AU", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 }
 
 function ensureAccountProgress(account) {
@@ -1112,6 +1148,8 @@ function renderStudentProgress() {
     studentMissionSelect.innerHTML = "";
     studentProgressList.innerHTML = "";
     roleProgressPanel.innerHTML = "";
+    rankCertificatesPanel.innerHTML = "";
+    rankCertificatesPanel.classList.add("hidden");
     studentProgressBadge.textContent = "0 complete";
     certificatePanel.classList.add("hidden");
     return;
@@ -1119,6 +1157,7 @@ function renderStudentProgress() {
   const account = getCurrentAccount();
   const progress = ensureAccountProgress(account);
   const summary = getStudentCompletionSummary(account);
+  const rankCertificates = getCompletedRankCertificates(account);
   const missions = summary.missions;
   const completedCount = summary.completedCount;
   studentProgressBadge.textContent = `${completedCount} complete`;
@@ -1138,6 +1177,16 @@ function renderStudentProgress() {
       <span class="role-badge ${levelComplete ? "earned" : ""}">${levelComplete ? `${campaign.label} Badge` : "Badge locked"}</span>
     </div>`;
   }).join("");
+  rankCertificatesPanel.classList.toggle("hidden", !rankCertificates.length);
+  rankCertificatesPanel.innerHTML = rankCertificates.map((certificate) => `
+    <div class="rank-certificate-card">
+      <div>
+        <strong>${certificate.levelLabel} Certificate</strong>
+        <div>${certificate.awardedAt ? `Awarded on ${formatCertificateDate(certificate.awardedAt)}` : "Rank complete"}</div>
+      </div>
+      <button type="button" class="secondary-button rank-certificate-button" data-level-key="${certificate.levelKey}">Download PDF</button>
+    </div>
+  `).join("");
   if (!missions.some((entry) => entry.missionKey === state.selectedStudentMissionKey)) {
     state.selectedStudentMissionKey = missions[0]?.missionKey ?? "";
   }
@@ -1167,7 +1216,7 @@ function renderStudentProgress() {
   if (summary.allComplete) {
     certificateStudentName.textContent = account.name ?? account.email;
     certificateDateText.textContent = summary.latestCompletedAt
-      ? `Awarded on ${new Date(summary.latestCompletedAt).toLocaleDateString()}`
+      ? `Awarded on ${formatCertificateDate(summary.latestCompletedAt)}`
       : "Awarded for completing all missions";
   }
 }
@@ -1346,15 +1395,15 @@ function setTheme() {
 
 function getRankRequirementText() {
   if (state.levelKey === "second_officer") {
-    return "Second Officer missions require at least one if statement, such as if (sensingColor(\"grey\")) { ... }.";
+    return "If statements are optional here. You can use colour sensing such as if (sensingColor(\"grey\")) { ... } when it helps your plan.";
   }
   if (state.levelKey === "first_officer") {
-    return "First Officer missions require at least one loop, such as for (let i = 0; i < 3; i++) { ... }.";
+    return "Loops are optional here. They can help repeat moves, such as for (let i = 0; i < 3; i++) { ... }.";
   }
   if (state.levelKey === "captain") {
-    return "Captain missions require both an if statement and a loop. Colour sensing conditions also work here.";
+    return "If statements and loops are both available if you want them, but Captain missions can still be solved without either one.";
   }
-  return "Cadet missions can be solved with direct commands. Higher ranks unlock required control structures.";
+  return "Direct commands work for every mission. If statements and loops are optional tools you can use at any rank.";
 }
 
 function getMissionColorZones() {
@@ -1396,6 +1445,242 @@ function loadMissionEditor(exampleOverride) {
   const savedCode = getSavedMissionCode();
   codeEditor.value = savedCode || (isExampleAvailableForMission() ? getMission().example : "");
   refreshExampleButton();
+}
+
+function getCertificateLogo() {
+  if (state.certificateLogo?.complete && state.certificateLogo.naturalWidth > 0) {
+    return state.certificateLogo;
+  }
+  return null;
+}
+
+function primeCertificateLogo() {
+  if (state.certificateLogoPromise || getCertificateLogo()) {
+    return;
+  }
+  if (typeof CERTIFICATE_LOGO_DATA_URL !== "string" || !CERTIFICATE_LOGO_DATA_URL) {
+    return;
+  }
+  const image = new Image();
+  state.certificateLogoPromise = image;
+  image.onload = () => {
+    state.certificateLogo = image;
+    state.certificateLogoPromise = null;
+  };
+  image.onerror = () => {
+    state.certificateLogoPromise = null;
+  };
+  image.src = CERTIFICATE_LOGO_DATA_URL;
+}
+
+function buildRankCertificateCanvas(studentName, levelLabel, awardDate, logoImage) {
+  const certificateCanvas = document.createElement("canvas");
+  certificateCanvas.width = 1600;
+  certificateCanvas.height = 1131;
+  const certificateContext = certificateCanvas.getContext("2d");
+
+  certificateContext.fillStyle = "#f7f1e4";
+  certificateContext.fillRect(0, 0, certificateCanvas.width, certificateCanvas.height);
+
+  certificateContext.fillStyle = "#163d66";
+  certificateContext.fillRect(70, 70, certificateCanvas.width - 140, 190);
+  certificateContext.fillStyle = "#245b90";
+  certificateContext.fillRect(70, 244, certificateCanvas.width - 140, 16);
+
+  certificateContext.strokeStyle = "#163d66";
+  certificateContext.lineWidth = 8;
+  certificateContext.strokeRect(52, 52, certificateCanvas.width - 104, certificateCanvas.height - 104);
+  certificateContext.strokeStyle = "#c8a95d";
+  certificateContext.lineWidth = 3;
+  certificateContext.strokeRect(82, 82, certificateCanvas.width - 164, certificateCanvas.height - 164);
+
+  if (logoImage?.naturalWidth) {
+    const logoWidth = 620;
+    const logoHeight = (logoImage.naturalHeight / logoImage.naturalWidth) * logoWidth;
+    certificateContext.drawImage(
+      logoImage,
+      (certificateCanvas.width - logoWidth) / 2,
+      100,
+      logoWidth,
+      logoHeight
+    );
+  } else {
+    certificateContext.fillStyle = "#ffffff";
+    certificateContext.font = "700 52px 'Space Grotesk', sans-serif";
+    certificateContext.textAlign = "center";
+    certificateContext.fillText("Buckley Park College", certificateCanvas.width / 2, 165);
+  }
+
+  certificateContext.fillStyle = "#163d66";
+  certificateContext.textAlign = "center";
+  certificateContext.font = "700 70px 'Space Grotesk', sans-serif";
+  certificateContext.fillText("Certificate of Rank Achievement", certificateCanvas.width / 2, 385);
+
+  certificateContext.fillStyle = "#8b6a2a";
+  certificateContext.font = "600 28px 'Chakra Petch', sans-serif";
+  certificateContext.fillText("Presented to", certificateCanvas.width / 2, 470);
+
+  certificateContext.fillStyle = "#112b45";
+  certificateContext.font = "700 84px 'Space Grotesk', sans-serif";
+  certificateContext.fillText(studentName, certificateCanvas.width / 2, 575);
+
+  certificateContext.strokeStyle = "#c8a95d";
+  certificateContext.lineWidth = 4;
+  certificateContext.beginPath();
+  certificateContext.moveTo(330, 612);
+  certificateContext.lineTo(certificateCanvas.width - 330, 612);
+  certificateContext.stroke();
+
+  certificateContext.fillStyle = "#31485e";
+  certificateContext.font = "500 34px 'Space Grotesk', sans-serif";
+  certificateContext.fillText("for successfully completing the rank of", certificateCanvas.width / 2, 700);
+
+  certificateContext.fillStyle = "#1c5c92";
+  certificateContext.font = "700 64px 'Chakra Petch', sans-serif";
+  certificateContext.fillText(levelLabel, certificateCanvas.width / 2, 790);
+
+  certificateContext.fillStyle = "#31485e";
+  certificateContext.font = "600 28px 'Space Grotesk', sans-serif";
+  certificateContext.fillText(`Awarded on ${awardDate}`, certificateCanvas.width / 2, 875);
+
+  certificateContext.fillStyle = "#163d66";
+  certificateContext.fillRect(245, 934, 1110, 2);
+  certificateContext.font = "700 24px 'Space Grotesk', sans-serif";
+  certificateContext.fillText("Buckley Park College Flight School", certificateCanvas.width / 2, 980);
+  certificateContext.font = "500 24px 'Space Grotesk', sans-serif";
+  certificateContext.fillText("Drone Programming Mission Certificate", certificateCanvas.width / 2, 1022);
+
+  return certificateCanvas;
+}
+
+function encodePdfBytes(text) {
+  return new TextEncoder().encode(text);
+}
+
+function joinPdfBytes(parts) {
+  const totalLength = parts.reduce((sum, part) => sum + part.length, 0);
+  const joined = new Uint8Array(totalLength);
+  let offset = 0;
+  parts.forEach((part) => {
+    joined.set(part, offset);
+    offset += part.length;
+  });
+  return joined;
+}
+
+function dataUrlToUint8Array(dataUrl) {
+  const base64Payload = dataUrl.split(",")[1] ?? "";
+  const binary = window.atob(base64Payload);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
+function buildImagePdf(jpegBytes, imageWidth, imageHeight) {
+  const pageWidth = 841.89;
+  const pageHeight = 595.28;
+  const contentStream = encodePdfBytes(`q\n${pageWidth} 0 0 ${pageHeight} 0 0 cm\n/Im0 Do\nQ`);
+  const objects = [
+    encodePdfBytes("<< /Type /Catalog /Pages 2 0 R >>"),
+    encodePdfBytes("<< /Type /Pages /Kids [3 0 R] /Count 1 >>"),
+    encodePdfBytes(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>`),
+    joinPdfBytes([
+      encodePdfBytes(`<< /Type /XObject /Subtype /Image /Width ${imageWidth} /Height ${imageHeight} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpegBytes.length} >>\nstream\n`),
+      jpegBytes,
+      encodePdfBytes("\nendstream"),
+    ]),
+    joinPdfBytes([
+      encodePdfBytes(`<< /Length ${contentStream.length} >>\nstream\n`),
+      contentStream,
+      encodePdfBytes("\nendstream"),
+    ]),
+  ];
+
+  const header = encodePdfBytes("%PDF-1.4\n%Codex\n");
+  const offsets = [0];
+  const parts = [header];
+  let currentOffset = header.length;
+
+  objects.forEach((objectBytes, index) => {
+    const objectNumber = index + 1;
+    const wrappedObject = joinPdfBytes([
+      encodePdfBytes(`${objectNumber} 0 obj\n`),
+      objectBytes,
+      encodePdfBytes("\nendobj\n"),
+    ]);
+    offsets[objectNumber] = currentOffset;
+    parts.push(wrappedObject);
+    currentOffset += wrappedObject.length;
+  });
+
+  const xrefOffset = currentOffset;
+  let xref = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (let index = 1; index <= objects.length; index += 1) {
+    xref += `${String(offsets[index]).padStart(10, "0")} 00000 n \n`;
+  }
+  xref += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  parts.push(encodePdfBytes(xref));
+
+  return new Blob(parts, { type: "application/pdf" });
+}
+
+function downloadBlob(blob, filename) {
+  if (window.navigator.msSaveOrOpenBlob) {
+    window.navigator.msSaveOrOpenBlob(blob, filename);
+    return;
+  }
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.target = "_blank";
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+async function savePdfBlob(blob, filename) {
+  if (window.showSaveFilePicker) {
+    const handle = await window.showSaveFilePicker({
+      suggestedName: filename,
+      types: [{
+        description: "PDF Document",
+        accept: { "application/pdf": [".pdf"] },
+      }],
+    });
+    const writable = await handle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+    return;
+  }
+  downloadBlob(blob, filename);
+}
+
+async function downloadRankCertificate(levelKey) {
+  if (!isStudentUser()) {
+    return;
+  }
+  const account = getCurrentAccount();
+  const rankCertificate = getCompletedRankCertificates(account).find((certificate) => certificate.levelKey === levelKey);
+  if (!rankCertificate) {
+    updateFeedback("Complete the full rank before downloading its certificate.", "Not Ready", "chip-warn");
+    return;
+  }
+  const studentName = account.name ?? account.email;
+  const awardDate = formatCertificateDate(rankCertificate.awardedAt);
+  const logoImage = getCertificateLogo();
+  const certificateCanvas = buildRankCertificateCanvas(studentName, rankCertificate.levelLabel, awardDate, logoImage);
+  const jpegUrl = certificateCanvas.toDataURL("image/jpeg", 0.94);
+  const jpegBytes = dataUrlToUint8Array(jpegUrl);
+  const pdfBlob = buildImagePdf(jpegBytes, certificateCanvas.width, certificateCanvas.height);
+  const safeName = studentName.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "student";
+  const safeRank = rankCertificate.levelLabel.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase();
+  await savePdfBlob(pdfBlob, `${safeName}-${safeRank}-certificate.pdf`);
+  updateFeedback(`${rankCertificate.levelLabel} certificate downloaded as PDF.`, "Certificate", "chip-good");
 }
 
 function updateFeedback(message, badgeText, badgeClass) {
@@ -1562,7 +1847,6 @@ function parseProgram(source) {
   const lines = source.split(/\r?\n/);
   const parsed = parseBlock(lines, 0, false);
   const commands = expandNodes(parsed.nodes, getInitialDrone());
-  validateRankRequirements(parsed.meta);
   if (!commands.length) throw new Error("Add at least one command before running the mission.");
   return { commands, meta: parsed.meta };
 }
@@ -1724,18 +2008,6 @@ function getPhotoTargetAtPosition(x, y) {
     const radius = target.radius ?? 44;
     return Math.hypot(x - target.x, y - target.y) <= radius;
   }) ?? null;
-}
-
-function validateRankRequirements(meta) {
-  if (state.levelKey === "second_officer" && !meta.usedIf) {
-    throw new Error("Second Officer missions require at least one if statement.");
-  }
-  if (state.levelKey === "first_officer" && !meta.usedLoop) {
-    throw new Error("First Officer missions require at least one loop.");
-  }
-  if (state.levelKey === "captain" && (!meta.usedIf || !meta.usedLoop)) {
-    throw new Error("Captain missions require both an if statement and a loop.");
-  }
 }
 
 function validateMissionCommandRequirements(commands) {
@@ -2425,12 +2697,30 @@ studentMissionSelect.addEventListener("change", () => {
   state.selectedStudentMissionKey = studentMissionSelect.value;
   switchStudentMissionByKey(studentMissionSelect.value);
 });
+rankCertificatesPanel.addEventListener("click", async (event) => {
+  const button = event.target.closest(".rank-certificate-button");
+  if (!(button instanceof HTMLButtonElement)) {
+    return;
+  }
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = "Preparing PDF...";
+  try {
+    await downloadRankCertificate(button.dataset.levelKey ?? "");
+  } catch (_error) {
+    updateFeedback("The certificate could not be generated right now. Please try again.", "Certificate", "chip-warn");
+  } finally {
+    button.disabled = false;
+    button.textContent = originalLabel;
+  }
+});
 printCertificateButton.addEventListener("click", () => {
   window.print();
 });
 
 loadAccounts();
 loadSession();
+primeCertificateLogo();
 setAuthMode("login");
 setAuthKind("student");
 refreshAuthUi();

@@ -600,6 +600,34 @@ select option {
   box-shadow: 0 0 18px rgba(255, 200, 108, 0.25);
 }
 
+.rank-certificates-panel {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 16px;
+}
+
+.rank-certificate-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 216, 108, 0.18);
+  background:
+    radial-gradient(circle at top right, rgba(255, 216, 108, 0.12), transparent 34%),
+    rgba(255, 255, 255, 0.05);
+}
+
+.rank-certificate-card strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.rank-certificate-card div:last-child {
+  color: var(--text-muted);
+}
+
 .teacher-dashboard {
   display: grid;
   gap: 12px;
@@ -623,6 +651,13 @@ select option {
 
 .certificate-panel h3 {
   margin-bottom: 10px;
+}
+
+@media (max-width: 780px) {
+  .rank-certificate-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 
 .teacher-student-card {
