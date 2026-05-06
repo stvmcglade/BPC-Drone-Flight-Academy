@@ -2010,7 +2010,7 @@ function getPhotoTargetAtPosition(x, y) {
   }) ?? null;
 }
 
-function validateMissionCommandRequirements(commands) {
+function getMissingMissionCommands(commands) {
   const mission = getMission();
   const commandNames = new Set(commands.map((command) => command.name));
   const missingCommands = [];
@@ -2023,9 +2023,7 @@ function validateMissionCommandRequirements(commands) {
   if ((mission.photoRequirements ?? []).length && !commandNames.has("takePhoto")) {
     missingCommands.push("takePhoto();");
   }
-  if (missingCommands.length) {
-    throw new Error(`This mission requires ${missingCommands.join(", ")} in your code before it can be completed.`);
-  }
+  return missingCommands;
 }
 
 function validateCommandAgainstState(command, previewDrone) {
@@ -2159,7 +2157,7 @@ function startProgram() {
   }
   try {
     const parsedProgram = parseProgram(codeEditor.value);
-    validateMissionCommandRequirements(parsedProgram.commands);
+    const missingMissionCommands = getMissingMissionCommands(parsedProgram.commands);
     state.animationQueue = buildAnimationQueue(parsedProgram.commands);
     state.drone = getInitialDrone();
     state.currentStep = null;
@@ -2174,7 +2172,13 @@ function startProgram() {
     renderCommandPreview(parsedProgram.commands);
     updateHud();
     renderMissionPanel();
-    updateFeedback("Program accepted. The mission simulation is running.", "Running", "chip-warn");
+    updateFeedback(
+      missingMissionCommands.length
+        ? `Program accepted. The mission simulation is running, but objectives linked to ${missingMissionCommands.join(", ")} will stay incomplete unless those commands are added.`
+        : "Program accepted. The mission simulation is running.",
+      "Running",
+      "chip-warn"
+    );
     startDroneHum();
   } catch (error) {
     state.playing = false;
